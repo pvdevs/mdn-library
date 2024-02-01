@@ -7,15 +7,25 @@ const logger = require('morgan');
 const indexRouter = require('./routes/index');
 const usersRouter = require('./routes/users');
 const catalogRouter = require('./routes/catalog.js');
-const wiki = require('./wiki.js');
+
+const compression = require('compression');
+const helmet = require('helmet');
 
 const app = express();
+
+const RateLimit = require('express-rate-limit');
+const limiter = RateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 20,
+});
 
 // Set up mongoose connection
 const mongoose = require('mongoose');
 mongoose.set('strictQuery', false);
-const mongoDB =
+
+const dev_db_url =
   'mongodb+srv://admin:admin@cluster0.6buflgv.mongodb.net/local_library?retryWrites=true&w=majority';
+const mongoDB = process.env.MONGODB_URI || dev_db_url;
 
 main().catch((err) => console.log(err));
 async function main() {
@@ -26,6 +36,17 @@ async function main() {
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'pug');
 
+app.use(compression()); // Compress all routes
+// Add helmet to the middleware chain.
+// Set CSP headers to allow our Bootstrap and Jquery to be served
+app.use(
+  helmet.contentSecurityPolicy({
+    directives: {
+      'script-src': ["'self'", 'code.jquery.com', 'cdn.jsdelivr.net'],
+    },
+  })
+);
+app.use(limiter);
 app.use(logger('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
@@ -35,7 +56,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/', indexRouter);
 app.use('/users', usersRouter);
 app.use('/catalog', catalogRouter);
-app.use('/wiki', wiki);
 
 // catch 404 and forward to error handler
 app.use(function (req, res, next) {
